@@ -140,6 +140,121 @@ This minimises spread cost and slippage in both inverse and momentum directions.
 
 ---
 
+## Understanding the Indicators
+
+### RSI — Relative Strength Index
+
+RSI acts as a **fatigue meter for price**. It measures how hard and fast price has moved over the last `rsi_period` M1 candles (default: 14 minutes), on a scale of 0 to 100.
+
+| RSI Range | What it means |
+|---|---|
+| Above 70 | Price has been running up aggressively — "overbought", statistically stretched |
+| Below 30 | Price has been selling off aggressively — "oversold", stretched to the downside |
+| 30 to 70 | No strong conviction — choppy or ranging, no clear momentum |
+
+When RSI is above 70 and a **SELL** cluster fires, the crowd is selling into an already-extended move. That is a situation where they *may be right* — not just noise. **The bot considers going with them**.
+
+When RSI is between 30 and 70 (no extreme), the crowd is more likely making an emotional or random entry. **The bot fades them as usual**.
+
+---
+
+### VWAP — Volume Weighted Average Price
+
+VWAP is the **fair value anchor for the day**. It calculates the average price that every unit of gold has traded at since midnight UTC, weighted by volume at each level. It resets daily.
+
+| Price vs VWAP | What it means |
+|---|---|
+| Significantly above VWAP | Buyers in control all day — bullish daily bias, price is extended above fair value |
+| Significantly below VWAP | Sellers in control — bearish daily bias, price is extended below fair value |
+| Near VWAP | Market is balanced — no strong daily directional bias |
+
+"Significantly" is defined by `vwap_band_pct: 0.001` — price must be at least **0.1% from VWAP** before the condition counts. At gold priced at $5,000 this is roughly **$5.00** of separation.
+
+VWAP is deliberately slower than RSI. It reflects the *entire day's* trading activity and is much harder to fake than a short-term RSI spike.
+
+---
+
+### Why RSI and VWAP Together
+
+Each indicator has a weakness in isolation:
+
+- **RSI alone** fires too often. On choppy days RSI can touch 70 and 30 repeatedly with no real momentum behind the move — you end up following weak clusters with no follow-through
+- **VWAP alone** is too slow. Price can sit above VWAP without any particular urgency — it does not tell you whether a genuine push is happening *right now*
+
+**Together they form a two-key lock:**
+
+> RSI says → *"right now, in the last 14 minutes, the move is extreme"*
+> VWAP says → *"and the whole day supports this direction"*
+
+Only when both keys agree does the bot classify a cluster as genuine momentum.
+
+---
+
+### Full Entry Decision Flow (Hybrid Mode)
+```
+1. CLUSTER DETECTED
+   ≥ 3 unique SiRiX traders open in the same direction within 30 seconds
+
+2. HYBRID CHECK (fetch last 300 M1 candles → compute RSI + VWAP)
+
+   SELL cluster fires:
+     Is RSI > 70?               (price overbought right now)
+     Is price > VWAP + 0.1%?    (daily bias is bullish, price is extended up)
+     ─────────────────────────────────────────────────
+     BOTH yes → crowd is selling into genuine overextension     → GO WITH → SELL
+     Either no → crowd is likely wrong / early                  → FADE    → BUY
+
+   BUY cluster fires:
+     Is RSI < 30?               (price oversold right now)
+     Is price < VWAP − 0.1%?    (daily bias is bearish, price is extended down)
+     ─────────────────────────────────────────────────
+     BOTH yes → crowd is buying into genuine oversold bounce    → GO WITH → BUY
+     Either no → crowd is likely wrong / early                  → FADE    → SELL
+
+3. LIMIT ORDER PLACED (never a market order)
+
+   Going BUY  → BUY_LIMIT  @ bid − $1.00
+                Order waits for a $1.00 dip before filling
+                Expires and cancels after 3 minutes if not filled
+
+   Going SELL → SELL_LIMIT @ ask + $1.00
+                Order waits for a $1.00 spike before filling
+                Expires and cancels after 3 minutes if not filled
+
+   Why limit orders in both directions?
+   Even when following momentum, entering on a micro-retracement rather than
+   chasing the spike gives a meaningfully better average entry price over time.
+   The $1.00 offset is small relative to the SL distance but improves the
+   effective R:R on every trade that fills.
+
+4. POSITION MANAGED (see Chandelier Stop + Breakeven section below)
+   · Chandelier trail activates at +0.3R profit
+   · SL moves to breakeven at +0.5R profit
+   · Fixed TP at 1.5R
+```
+
+---
+
+### Trade Identification by Mode
+
+Every trade is tagged with its direction decision for post-analysis:
+
+| Where | Tag |
+|---|---|
+| MT5 History → Comment column | `Chand_Hybrid_inv` or `Chand_Hybrid_mom` |
+| `logs/bot_log.jsonl` | `"trade_mode": "inverse"` or `"trade_mode": "momentum"` |
+| `state/bot_state.json` | `"trade_mode"` field on every live position |
+
+Monthly analysis example (Python):
+```python
+import pandas as pd
+df     = pd.read_json("logs/bot_log.jsonl", lines=True)
+closed = df[df["msg"].str.startswith("[CLOSED]")]
+print(closed.groupby("trade_mode")["closed_reason"].value_counts())
+```
+
+---
+
 ## Chandelier Stop + Breakeven
 
 ### Chandelier Trail
