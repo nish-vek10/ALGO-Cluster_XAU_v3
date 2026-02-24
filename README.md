@@ -90,11 +90,11 @@ k_unique: 3          # open in the same direction within T seconds of each other
 direction_mode: "hybrid"   # "inverse" | "momentum" | "hybrid"
 
 # Hybrid thresholds:
-rsi_overbought: 65.0   # RSI above this → bearish momentum confirmed
-rsi_oversold:   35.0   # RSI below this → bullish momentum confirmed
+rsi_overbought: 70.0   # RSI above this → bearish momentum confirmed
+rsi_oversold:   30.0   # RSI below this → bullish momentum confirmed
 vwap_band_pct: 0.001   # price must be 0.1% away from VWAP to count
 
-limit_offset_dollars: 2.0  # BUY_LIMIT = bid - $2;  SELL_LIMIT = ask + $2
+limit_offset_dollars: 1.0  # BUY_LIMIT = bid - $1;  SELL_LIMIT = ask + $2
 
 breakeven_trigger_R: 0.5   # move SL to entry once +0.5R profit is reached
 trail_start_R: 0.3          # chandelier trail activates at +0.3R profit
@@ -114,11 +114,11 @@ Cluster detected (e.g. SELL cluster: ≥K traders opened SELL within T seconds)
 IF direction_mode == "hybrid":
 
   SELL cluster → go WITH (sell) if BOTH:
-    · RSI > rsi_overbought   (65)  → price is overbought, real selling pressure
+    · RSI > rsi_overbought   (70)  → price is overbought, real selling pressure
     · price > VWAP × (1 + 0.001)  → price extended above daily anchor
 
   BUY cluster → go WITH (buy) if BOTH:
-    · RSI < rsi_oversold     (35)  → price is oversold, real buying pressure
+    · RSI < rsi_oversold     (30)  → price is oversold, real buying pressure
     · price < VWAP × (1 - 0.001)  → price extended below daily anchor
 
   Otherwise → INVERSE (fade the crowd as original)
@@ -278,8 +278,8 @@ The entire `src/core/`, `src/mt5/`, `src/sirix/`, and `src/strategies/` infrastr
 All logs are written to `logs/bot_log.jsonl` as one JSON object per line:
 
 ```json
-{"ts_utc": "2025-06-01T09:15:32Z", "level": "INFO", "strategy": "Chandelier_Hybrid", "magic": 880003, "msg": "[HYBRID] cluster=buy RSI=29.4 VWAP=2310.50 price=2307.20 → mode=momentum trade_side=buy"}
-{"ts_utc": "2025-06-01T09:15:33Z", "level": "INFO", "strategy": "Chandelier_Hybrid", "magic": 880003, "msg": "[OK] PENDING BUY [momentum] entry=2305.20 SL=2299.10 TP=2311.30 lots=0.12 ticket=12345678"}
+{"ts_utc": "2025-06-01T09:15:32Z", "level": "INFO", "strategy": "CH-HYBRID", "magic": 880003, "msg": "[HYBRID] cluster=buy RSI=29.4 VWAP=2310.50 price=2307.20 → mode=momentum trade_side=buy"}
+{"ts_utc": "2025-06-01T09:15:33Z", "level": "INFO", "strategy": "CH-HYBRID", "magic": 880003, "msg": "[OK] PENDING BUY [momentum] entry=2305.20 SL=2299.10 TP=2311.30 lots=0.12 ticket=12345678"}
 ```
 
 This format is directly queryable with `pandas`, `jq`, or any log aggregation tool.

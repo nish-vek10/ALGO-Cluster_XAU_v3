@@ -1,0 +1,86 @@
+# config/strategies.yaml
+# ─────────────────────────────────────────────────────────────────────────────
+# Strategy definitions.
+# Each top-level key maps to a bot (BOT_KEY in config.py).
+# Add a new key + list to run a second, independent bot on a different account.
+# ─────────────────────────────────────────────────────────────────────────────
+
+xau_cluster_bot-v3:
+
+  - name: "CH-HYBRID"
+    magic: 880003
+    enabled: true
+
+    # ── Cluster detection ───────────────────────────────────────────────────
+    t_seconds: 30           # rolling event-time window (seconds)
+    k_unique: 3             # min unique SiRiX traders to form a cluster
+
+    # ── Exits ───────────────────────────────────────────────────────────────
+    hold_minutes: 15        # max hold time (only used if use_time_exit=true)
+    sl_distance: 2.0        # fallback fixed SL distance (dollars) if no ATR
+    tp_R_multiple: 1.5      # TP = tp_R_multiple × initial SL distance  (1:1)
+    use_tp_exit: true
+    use_time_exit: false
+
+    # ── Stop / trail mode ───────────────────────────────────────────────────
+    stop_mode: "chandelier"   # options: fixed | atr_static | atr_trailing | chandelier
+    atr_period: 5
+    atr_init_mult: 3.0        # initial SL = entry ± (atr × atr_init_mult)
+    atr_trail_mult: 2.0       # trail SL = HH/LL(lookback) ± (atr × atr_trail_mult)
+    chan_lookback: 30          # chandelier: lookback bars for HH / LL
+
+    # ── Trailing gate ───────────────────────────────────────────────────────
+    # Trailing only activates once position is at +trail_start_R profit.
+    # e.g. 0.3 = start trailing from +30% of initial SL distance in profit
+    trail_start_R: 0.3
+
+    # ── Breakeven ───────────────────────────────────────────────────────────
+    # Move SL to entry once position reaches +be_trigger_R profit.
+    # Set to null to disable.
+    breakeven_trigger_R: 0.5   # move SL to breakeven at +0.5R
+
+    # ── Entry (limit order) ─────────────────────────────────────────────────
+    # BUY  entry → BUY_LIMIT  @ bid − limit_offset_dollars   (cheaper entry)
+    # SELL entry → SELL_LIMIT @ ask + limit_offset_dollars   (higher entry = better for sell)
+    limit_offset_dollars: 1.0
+
+    # ── Position capacity ───────────────────────────────────────────────────
+    max_open_positions: 2
+
+    # ── Risk sizing ─────────────────────────────────────────────────────────
+    risk_mode: "dynamic_pct"   # dynamic_pct | static_pct | fixed_lots
+    risk_percent: 0.01         # 1 % of equity per trade
+    fixed_lots: 0.10           # used only if risk_mode = fixed_lots
+    static_risk_base_balance: 10000.0   # used only if risk_mode = static_pct
+
+    # ── Direction / hybrid model ─────────────────────────────────────────────
+    # "inverse"   → always fade the cluster (original logic)
+    # "momentum"  → always go WITH the cluster
+    # "hybrid"    → use RSI + VWAP to decide per-cluster (recommended)
+    direction_mode: "hybrid"
+
+    # Hybrid thresholds (ignored if direction_mode != hybrid)
+    rsi_period: 14
+    rsi_overbought: 70.0    # RSI above this → overbought signal
+    rsi_oversold:   30.0    # RSI below this → oversold signal
+    # VWAP band: price must be this far from VWAP to count as "away"
+    # 0.001 = 0.1 % of VWAP price → roughly $5 on XAUUSD at $5000
+    vwap_band_pct: 0.001
+    # true  → BOTH RSI and VWAP conditions must agree for momentum mode
+    # false → EITHER condition alone triggers momentum mode
+    hybrid_require_both: true
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TEMPLATE for a second bot / account
+# Uncomment and fill in to run another independent script simultaneously.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# xau_second_bot:
+#   - name: "MyStrategy"
+#     magic: 990001
+#     enabled: true
+#     t_seconds: 45
+#     k_unique: 4
+#     direction_mode: "inverse"
+#     ...
